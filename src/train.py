@@ -1,7 +1,9 @@
 import os
 import time 
 import torch
+import numpy as np
 import torch.distributed as dist 
+import torch.nn as nn
 from model import Model
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, TensorDataset
@@ -71,6 +73,39 @@ sampler_per_rank = len(sampler)
 print(f'No of the batchers {num_batches}')
 print(f'No of the sample per rank {sampler_per_rank}')
 
+
+optimizer = torch.optim.Adam(dpp_model.parameters(),lr=1e-3)
+criterion = nn.CrossEntropyLoss()
+
+dpp_model.train()
+total_loss = 0.0
+num_steps = 0
+step_times = []
+
+for i in range(0,50):
+    for batch_x, batch_y in data_loader:
+        t0 = time.perf_counter()
+        optimizer.zero_grad()
+
+        logits = dpp_model(batch_x.to(device))
+        loss = criterion(logits.view(-1,vocab_size),(batch_y.to(device)).view(-1))
+
+        loss.backward()
+
+        nn.utils.clip_grad_norm_(dpp_model.parameters(),max_norm=1.0)
+        optimizer.step()
+
+        step_time = time.perf_counter() - t0
+        step_times.append(step_time)
+        total_loss += loss.item()
+        num_steps +=1
+
+avg_loss = total_loss/num_steps
+avg_step_ms = np.mean(step_times)*1000
+
+
+print(f'Average loss: {avg_loss}')
+print(f'Average step time: {avg_step_ms}')
 clean_up_distributed_process()
 
 
