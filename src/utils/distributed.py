@@ -4,7 +4,7 @@ import torch
 import torch.distributed as dist
 
 
-def setup_distributed() -> tuple[int, int, int]:
+def setup_distributed(backend: str | None = None) -> tuple[int, int, int]:
     """Init the process group from torchrun's env vars.
 
     Returns (rank, local_rank, world_size).
@@ -13,10 +13,11 @@ def setup_distributed() -> tuple[int, int, int]:
     local_rank = int(os.environ["LOCAL_RANK"])
     world_size = int(os.environ["WORLD_SIZE"])
 
-    backend = "nccl" if torch.cuda.is_available() else "gloo"
+    if backend is None:
+        backend = "nccl" if torch.cuda.is_available() else "gloo"
     dist.init_process_group(backend=backend, rank=rank, world_size=world_size)
 
-    if torch.cuda.is_available():
+    if backend == "nccl":
         torch.cuda.set_device(local_rank)
 
     return rank, local_rank, world_size
